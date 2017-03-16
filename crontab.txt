@@ -1,0 +1,1 @@
+*/5 * * * * cd byteball-btc-oracle/node_modules/btc-oracle; node check_daemon.js 1>>~/.config/bitcore/check_daemon.log 2>>~/.config/bitcore/check_daemon.err

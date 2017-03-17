@@ -35,12 +35,10 @@ conf.bSingleAddress = true;
 conf.MIN_AVAILABLE_POSTINGS = conf.MIN_AVAILABLE_POSTINGS || 100;
 
 /*
-function readSingleAddress(handleAddress){
+// testnet
+headlessWallet.readSingleAddress = function(handleAddress){
 	return handleAddress('J4GQZL73OALOHABJVBQHSEMTUAKJ3RQH');
-	db.query("SELECT address FROM my_addresses JOIN outputs USING(address) WHERE is_spent=0 AND asset IS NULL ORDER BY amount DESC LIMIT 1", function(rows){
-		handleAddress(rows[0].address);
-	});
-}
+};
 */
 
 // make sure exponential notation is never used
@@ -236,30 +234,34 @@ function initChat(oracleService){
 			}
 		);
 	}
-
+	
 	function postBlockData(height, onDone){
-		function abort(err){
-			console.log(err);
-			if (onDone)
-				onDone();
-		}
-		console.log('will post data of block '+height);
-		readOutputsInBlock(height, function(arrElements, blockHash){
-			if (assocQueuedBlocks[blockHash])
-				return abort("block "+blockHash+" already queued");
-			determineIfDataFeedAlreadyPosted(BLOCK_HASH_FEED_NAME, blockHash, function(bAlreadyPosted){
-				if (bAlreadyPosted)
-					return abort("block "+blockHash+" already processed");
-				if (assocQueuedBlocks[blockHash])
-					return abort("block "+blockHash+" already queued 2");
-				let merkle_root = merkle.getMerkleRoot(arrElements);
-				let datafeed = {};
-				datafeed[BLOCK_HASH_FEED_NAME] = blockHash;
-				datafeed[BLOCK_HEIGHT_FEED_NAME] = height;
-				datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
-				reliablyPostDataFeed(datafeed);
+		mutex.lock(['post'], unlock => {
+			function abort(err){
+				console.log(err);
+				unlock();
 				if (onDone)
 					onDone();
+			}
+			console.log('will post data of block '+height);
+			readOutputsInBlock(height, function(arrElements, blockHash){
+				if (assocQueuedBlocks[blockHash])
+					return abort("block "+blockHash+" already queued");
+				determineIfDataFeedAlreadyPosted(BLOCK_HASH_FEED_NAME, blockHash, function(bAlreadyPosted){
+					if (bAlreadyPosted)
+						return abort("block "+blockHash+" already processed");
+					if (assocQueuedBlocks[blockHash])
+						return abort("block "+blockHash+" already queued 2");
+					let merkle_root = merkle.getMerkleRoot(arrElements);
+					let datafeed = {};
+					datafeed[BLOCK_HASH_FEED_NAME] = blockHash;
+					datafeed[BLOCK_HEIGHT_FEED_NAME] = height;
+					datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
+					reliablyPostDataFeed(datafeed);
+					unlock();
+					if (onDone)
+						onDone();
+				});
 			});
 		});
 	}
@@ -337,7 +339,7 @@ function initChat(oracleService){
 	});
 	
 	eventBus.on('paired', function(from_address){
-		device.sendMessageToDevice(from_address, 'text', "Type your receiving Bitcoin address, I'll respond with the merkle proof that your address did receive bitcoins.");
+		device.sendMessageToDevice(from_address, 'text', "Type a receiving Bitcoin address, I'll respond with the merkle proof that this address did receive bitcoins.");
 	});
 
 	eventBus.on('text', function(from_address, text){
@@ -345,7 +347,7 @@ function initChat(oracleService){
 		let lc_text = text.toLowerCase();
 		
 		if (lc_text === 'help')
-			return device.sendMessageToDevice(from_address, 'text', "Type your receiving Bitcoin address, I'll respond with the merkle proof that your address did receive bitcoins.");
+			return device.sendMessageToDevice(from_address, 'text', "Type a receiving Bitcoin address, I'll respond with the merkle proof that this address did receive bitcoins.");
 
 		var bValidBitcoinAddress = bitcore.Address.isValid(text, bitcoinNetwork);
 		if (bValidBitcoinAddress){
@@ -428,7 +430,7 @@ function initChat(oracleService){
 			return;
 		}
 		else
-			return device.sendMessageToDevice(from_address, 'text', "That doesn't look like a valid Bitcoin address.  Type your receiving Bitcoin address, I'll respond with the merkle proof that your address did receive bitcoins.");
+			return device.sendMessageToDevice(from_address, 'text', "That doesn't look like a valid Bitcoin address.  Type a receiving Bitcoin address, I'll respond with the merkle proof that this address did receive bitcoins.");
 		
 	});
 	

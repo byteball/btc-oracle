@@ -2,7 +2,7 @@
 	"name": "btc-oracle",
 	"description": "Byteball BTC Oracle",
 	"author": "Byteball",
-	"version": "0.1.0",
+	"version": "0.1.6",
 	"main": "index.js",
 	"keywords": [
 		"oracle",
@@ -21,7 +21,6 @@
 	"dependencies": {
 		"headless-byteball": "git+https://github.com/byteball/headless-byteball.git",
 		"byteballcore": "^0.1.46",
-		"bitcore-lib": "^0.13.14",
-		"bitcoin": "^3.0.1"
+		"bitcore-lib": "^0.13.14"
 	}
 }

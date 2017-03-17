@@ -158,7 +158,7 @@ function reliablyPostDataFeed(datafeed){
 
 function determineIfDataFeedAlreadyPosted(name, value, handleResult){
 	db.query(
-		"SELECT 1 FROM data_feeds JOIN unit_authors USING(unit) WHERE address=? AND feed_name=? AND `value`=?", 
+		"SELECT 1 FROM data_feeds CROSS JOIN unit_authors USING(unit) WHERE address=? AND feed_name=? AND `value`=?", 
 		[my_address, name, value],
 		function(rows){
 			handleResult(rows.length > 0);
@@ -210,7 +210,7 @@ function initChat(oracleService){
 	
 	function checkForMissingBlocks(){
 		db.query(
-			"SELECT int_value FROM data_feeds JOIN unit_authors USING(unit) WHERE address=? AND feed_name=? ORDER BY int_value", 
+			"SELECT int_value FROM data_feeds CROSS JOIN unit_authors USING(unit) WHERE address=? AND feed_name=? ORDER BY int_value", 
 			[my_address, BLOCK_HEIGHT_FEED_NAME],
 			function(rows){
 				if (rows.length === 0) // no blocks yet
@@ -350,17 +350,20 @@ function initChat(oracleService){
 		var bValidBitcoinAddress = bitcore.Address.isValid(text, bitcoinNetwork);
 		if (bValidBitcoinAddress){
 			var bitcoin_address = text;
-			oracleService.node.services.bitcoind.getAddressHistory([bitcoin_address], {}, function(err, history){
+			oracleService.node.services.bitcoind.getAddressHistory([bitcoin_address], {queryMempool: false}, function(err, history){
 				if (err)
 					throw Error('getAddressHistory failed: '+err);
 				console.log('transactions: '+history.items.length, history);
+				history.items = history.items.filter(item => { return (item.satoshis > 0 && item.confirmations >= MIN_CONFIRMATIONS); });
 				if (history.items.length === 0)
 					return device.sendMessageToDevice(from_address, 'text', "This address didn't receive anything");
 				var bFound = false;
-				for (var i=history.items.length-1; i>=0; i--){
+				for (var i=0; i<history.items.length; i++){ // history is already sorted in reverse order and truncated at 50 items
 					var item = history.items[i];
-					if (item.satoshis < 0) // spend from the address
+					/*if (item.satoshis < 0) // spend from the address
 						continue;
+					if (item.confirmations < MIN_CONFIRMATIONS)
+						continue;*/
 					var arrAddresses = Object.keys(item.addresses);
 					if (arrAddresses.length > 1)
 						throw Error('more than 1 to-address: '+arrAddresses.join(', ')+'; tx '+item.tx.hash);
@@ -383,11 +386,11 @@ function initChat(oracleService){
 					console.log(i+': looking for block '+height+': '+blockHash);
 					db.query(
 						"SELECT DISTINCT merkle_data.value, is_stable \n\
-						FROM unit_authors \n\
-						JOIN units USING(unit) \n\
-						JOIN data_feeds AS block_hash_data USING(unit) \n\
+						FROM data_feeds AS block_hash_data \n\
 						JOIN data_feeds AS block_height_data USING(unit) \n\
 						JOIN data_feeds AS merkle_data USING(unit) \n\
+						CROSS JOIN unit_authors USING(unit) \n\
+						JOIN units USING(unit) \n\
 						WHERE address=? AND sequence='good' \n\
 							AND block_hash_data.feed_name=? AND block_hash_data.value=? \n\
 							AND block_height_data.feed_name=? AND block_height_data.int_value=? \n\
@@ -395,7 +398,7 @@ function initChat(oracleService){
 						[my_address, BLOCK_HASH_FEED_NAME, blockHash, BLOCK_HEIGHT_FEED_NAME, height, MERKLE_ROOT_FEED_NAME],
 						function(rows){
 							if (rows.length === 0)
-								return device.sendMessageToDevice(from_address, 'text', "No proof found for tx "+item.tx.hash+", block "+blockHash);
+								return device.sendMessageToDevice(from_address, 'text', "No proof found for tx "+item.tx.hash+", block #"+height+" "+blockHash);
 							if (rows.length > 1)
 								notifications.notifyAdmin('more than one proof', "address "+bitcoin_address+"\ntx "+item.tx.hash+"\nheight "+height+"\nblock "+blockHash+"\n"+JSON.stringify(rows, null, '\t'));
 							let row = rows[0];
@@ -411,7 +414,7 @@ function initChat(oracleService){
 									let serialized_proof = merkle.serializeMerkleProof(proof);
 									if (proof.root !== merkle_root)
 										throw Error("merkle root mismatch: in db "+merkle_root+", proof "+serialized_proof);
-									device.sendMessageToDevice(from_address, 'text', "This is your merkle proof.  Please copy and paste it on the Send page to unlock the funds from your smart wallet:\n"+serialized_proof);
+									device.sendMessageToDevice(from_address, 'text', "This is your merkle proof of "+element+".  Please copy and paste it on the Send page to unlock the funds from your smart wallet:\n"+serialized_proof);
 								});
 							});
 						}

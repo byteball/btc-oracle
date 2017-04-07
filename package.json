@@ -2,7 +2,7 @@
 	"name": "btc-oracle",
 	"description": "Byteball BTC Oracle",
 	"author": "Byteball",
-	"version": "0.1.9",
+	"version": "0.1.10",
 	"main": "index.js",
 	"keywords": [
 		"oracle",

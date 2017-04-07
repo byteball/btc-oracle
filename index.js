@@ -255,12 +255,12 @@ function initChat(oracleService){
 						return abort("block "+blockHash+" already queued 2");
 					let merkle_root = merkle.getMerkleRoot(arrElements);
 					let rand_int32 = crypto.createHash("sha256").update(blockHash, "utf8").digest().readUInt32BE(0);
-					let rand_0_to_100000 = Math.round(100000 * rand_int32 / Math.pow(2, 32));
+					let rand_1_to_100000 = Math.floor(100000 * rand_int32 / Math.pow(2, 32)) + 1;
 					let datafeed = {};
 					datafeed[BLOCK_HASH_FEED_NAME] = blockHash;
 					datafeed[BLOCK_HEIGHT_FEED_NAME] = height;
 					datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
-					datafeed['random'+height] = rand_0_to_100000;
+					datafeed['random'+height] = rand_1_to_100000;
 					reliablyPostDataFeed(datafeed);
 					unlock();
 					if (onDone)

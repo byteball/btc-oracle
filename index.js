@@ -310,6 +310,20 @@ function initChat(oracleService){
 		});
 	}
 	
+	function readBlockHeaderWithRetries(blockHash, handleBlockHeader, count_tries){
+		oracleService.node.services.bitcoind.getBlockHeader(blockHash, function(err, blockHeader) {
+			if (err){
+				if (count_tries >= 3)
+					throw Error('getBlockHeader '+blockHash+' failed after 3 attempts: '+err);
+				setTimeout(() => {
+					readBlockHeaderWithRetries(blockHash, handleBlockHeader, (count_tries || 0) + 1);
+				}, 30000);
+				return;
+			}
+			console.log('blockHeader '+JSON.stringify(blockHeader, null, '\t'));
+			handleBlockHeader(blockHeader);
+		});
+	}
 	
 	/////////////////////////////////
 	// start
@@ -332,10 +346,7 @@ function initChat(oracleService){
 		blockHash = blockHash.toString('hex');
 		console.log('=== new block '+blockHash);
 		// get only the block header and index (including chain work, height, and previous hash)
-		oracleService.node.services.bitcoind.getBlockHeader(blockHash, function(err, blockHeader) {
-			if (err)
-				throw Error('getBlockHeader '+blockHash+' failed: '+err);
-			console.log('blockHeader '+JSON.stringify(blockHeader, null, '\t'));
+		readBlockHeaderWithRetries(blockHash, function(blockHeader) {
 			let last_height = blockHeader.height;
 			let last_confirmed_height = last_height - MIN_CONFIRMATIONS + 1;
 			postBlockData(last_confirmed_height);

@@ -271,9 +271,7 @@ function initChat(oracleService){
 	}
 	
 	function readOutputsInBlock(height, handleOutputElements){
-		oracleService.node.services.bitcoind.getBlock(height, function(err, block) {
-			if (err)
-				throw Error('getBlock '+height+' failed: '+err);
+		readBlockWithRetries(height, function(block) {
 			var arrElements = [];
 			var bAborted = false;
 			block.transactions.forEach(transaction => {
@@ -322,6 +320,20 @@ function initChat(oracleService){
 			}
 			console.log('blockHeader '+JSON.stringify(blockHeader, null, '\t'));
 			handleBlockHeader(blockHeader);
+		});
+	}
+	
+	function readBlockWithRetries(height, handleBlock, count_tries){
+		oracleService.node.services.bitcoind.getBlock(height, function(err, block) {
+			if (err){
+				if (count_tries >= 3)
+					throw Error('getBlock '+height+' failed after 3 attempts: '+err);
+				setTimeout(() => {
+					readBlockWithRetries(height, handleBlock, (count_tries || 0) + 1);
+				}, 30000);
+				return;
+			}
+			handleBlock(block);
 		});
 	}
 	

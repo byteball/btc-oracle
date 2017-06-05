@@ -356,6 +356,7 @@ function initChat(oracleService){
 
 	checkForMissingBlocks();
 	
+	var prev_height;
 	oracleService.node.services.bitcoind.on('block', function(blockHash) {
 		blockHash = blockHash.toString('hex');
 		console.log('=== new block '+blockHash);
@@ -363,7 +364,15 @@ function initChat(oracleService){
 		readBlockHeaderWithRetries(blockHash, function(blockHeader) {
 			let last_height = blockHeader.height;
 			let last_confirmed_height = last_height - MIN_CONFIRMATIONS + 1;
-			postBlockData(last_confirmed_height);
+			var arrHeights = [];
+			if (prev_height)
+				for (var h=prev_height+1; h<=last_confirmed_height; h++)
+					arrHeights.push(h); // sometimes 'block' event is not called for a new block, make sure we don't skip it
+			else
+				arrHeights.push(last_confirmed_height);
+			prev_height = last_confirmed_height;
+			async.eachSeries(arrHeights, postBlockData);
+		//	postBlockData(last_confirmed_height);
 		});
 	});
 	

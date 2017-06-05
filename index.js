@@ -313,6 +313,7 @@ function initChat(oracleService){
 			if (err){
 				if (count_tries >= 3)
 					throw Error('getBlockHeader '+blockHash+' failed after 3 attempts: '+err);
+				console.log('getBlockHeader '+blockHash+' attempt '+count_tries+' failed, will retry: '+err);
 				setTimeout(() => {
 					readBlockHeaderWithRetries(blockHash, handleBlockHeader, (count_tries || 0) + 1);
 				}, 30000);
@@ -328,6 +329,7 @@ function initChat(oracleService){
 			if (err){
 				if (count_tries >= 3)
 					throw Error('getBlock '+height+' failed after 3 attempts: '+err);
+				console.log('getBlock '+height+' attempt '+count_tries+' failed, will retry: '+err);
 				setTimeout(() => {
 					readBlockWithRetries(height, handleBlock, (count_tries || 0) + 1);
 				}, 30000);

@@ -391,8 +391,11 @@ function initChat(oracleService){
 		if (bValidBitcoinAddress){
 			var bitcoin_address = text;
 			oracleService.node.services.bitcoind.getAddressHistory([bitcoin_address], {queryMempool: false}, function(err, history){
-				if (err)
-					throw Error('getAddressHistory failed: '+err);
+				if (err){
+				//	throw Error('getAddressHistory failed: '+err);
+					notifications.notifyAdmin('getAddressHistory '+bitcoin_address+' failed: '+err);
+					return device.sendMessageToDevice(from_address, 'text', "Failed to get the address history, try again in a minute.");
+				}
 				console.log('transactions: '+history.items.length, history);
 				history.items = history.items.filter(item => { return (item.satoshis > 0 && item.confirmations >= MIN_CONFIRMATIONS); });
 				if (history.items.length === 0)

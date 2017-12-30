@@ -259,7 +259,8 @@ function initChat(oracleService){
 					let datafeed = {};
 					datafeed[BLOCK_HASH_FEED_NAME] = blockHash;
 					datafeed[BLOCK_HEIGHT_FEED_NAME] = height;
-					datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
+					if (merkle_root)
+						datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
 					datafeed['random'+height] = rand_1_to_100000;
 					reliablyPostDataFeed(datafeed);
 					unlock();

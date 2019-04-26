@@ -2,21 +2,21 @@
 'use strict';
 var util = require('util');
 var crypto = require('crypto');
-var async = require('byteballcore/node_modules/async');
-var _ = require('byteballcore/node_modules/lodash');
+var async = require('ocore/node_modules/async');
+var _ = require('ocore/node_modules/lodash');
 var bitcore = require('bitcore-lib');
 var EventEmitter = require('events').EventEmitter;
 var notifications = require('./notifications.js');
-var conf = require('byteballcore/conf.js');
-var objectHash = require('byteballcore/object_hash.js');
-var merkle = require('byteballcore/merkle.js');
-var constants = require('byteballcore/constants.js');
-var db = require('byteballcore/db.js');
-var mutex = require('byteballcore/mutex.js');
-var eventBus = require('byteballcore/event_bus.js');
-var ValidationUtils = require("byteballcore/validation_utils.js");
-var desktopApp = require('byteballcore/desktop_app.js');
-var headlessWallet = require('headless-byteball');
+var conf = require('ocore/conf.js');
+var objectHash = require('ocore/object_hash.js');
+var merkle = require('ocore/merkle.js');
+var constants = require('ocore/constants.js');
+var db = require('ocore/db.js');
+var mutex = require('ocore/mutex.js');
+var eventBus = require('ocore/event_bus.js');
+var ValidationUtils = require("ocore/validation_utils.js");
+var desktopApp = require('ocore/desktop_app.js');
+var headlessWallet = require('headless-obyte');
 
 const RETRY_TIMEOUT = 300*1000;
 const MIN_CONFIRMATIONS = conf.MIN_CONFIRMATIONS || 2;
@@ -111,8 +111,8 @@ function postDataFeed(datafeed, onDone){
 		notifications.notifyAdminAboutFailedPosting(err);
 		onDone(err);
 	}
-	var network = require('byteballcore/network.js');
-	var composer = require('byteballcore/composer.js');
+	var network = require('ocore/network.js');
+	var composer = require('ocore/composer.js');
 	createOptimalOutputs(function(arrOutputs){
 		let params = {
 			paying_addresses: [my_address], 
@@ -196,8 +196,8 @@ function initChat(oracleService){
 		return;
 	}
 	
-	var bbWallet = require('byteballcore/wallet.js');
-	var device = require('byteballcore/device.js');
+	var bbWallet = require('ocore/wallet.js');
+	var device = require('ocore/device.js');
 	
 	function readCurrentHeight(handleCurrentHeight){
 		oracleService.node.services.bitcoind.getInfo(function(err, currentInfo){

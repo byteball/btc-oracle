@@ -1,12 +1,13 @@
 {
 	"name": "btc-oracle",
-	"description": "Byteball BTC Oracle",
-	"author": "Byteball",
+	"description": "Obyte BTC Oracle",
+	"author": "Obyte",
 	"version": "0.1.15",
 	"main": "index.js",
 	"keywords": [
 		"oracle",
 		"bitcoin",
+		"obyte",
 		"byteball",
 		"chatbot"
 	],
@@ -19,8 +20,8 @@
 		"url": "https://github.com/byteball/btc-oracle/issues"
 	},
 	"dependencies": {
-		"headless-byteball": "git+https://github.com/byteball/headless-byteball.git",
-		"byteballcore": "^0.2.2",
+		"headless-obyte": "git+https://github.com/byteball/headless-obyte.git",
+		"ocore": "git+https://github.com/byteball/ocore.git",
 		"bitcore-lib": "^0.13.14"
 	}
 }

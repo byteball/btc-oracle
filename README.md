@@ -1,10 +1,10 @@
 # BTC Oracle
 
-This oracle posts data about recent Bitcoin payments into Byteball database.  It parses the recent blocks that got at least 2 (configurable) confirmations, collects all outputs into a Merkle tree and posts its Merkle root as Byteball data feed.
+This oracle posts data about recent Bitcoin payments into Obyte database.  It parses the recent blocks that got at least 2 (configurable) confirmations, collects all outputs into a Merkle tree and posts its Merkle root as Obyte data feed.
 
 To get a proof that a particular Bitcoin address did receive a particular payment, a user chats with the oracle bot, sends the Bitcoin address and the bot responds with a Merkle proof that this Bitcoin address did receive a payment.  The user then copies and pastes this Merkle proof into the wallet in order to unlock funds from a smart contract.
 
-This data can be used for trustless (except the trust to this oracle) exchange of bitcoins against bytes or any other Byteball asset, including private assets such as blackbytes.  The seller of bytes sends them to a smart contract that can be unlocked:
+This data can be used for trustless (except the trust to this oracle) exchange of bitcoins against bytes or any other Obyte asset, including private assets such as blackbytes.  The seller of bytes sends them to a smart contract that can be unlocked:
 
 * by the buyer, if he provides a Merkle proof (obtained from this oracle) that he sent the required amount of bitcoins to the seller's Bitcoin address
 * by the seller, after expiry period
@@ -15,11 +15,11 @@ The Merkle proofs provided by this oracle are reproducible -- they can be genera
 
 Install [bitcore](https://bitcore.io/guides/full-node/) and create new bitcore node:
 ```
-bitcore create -d ~/.bitcore/data byteball-btc-oracle
+bitcore create -d ~/.bitcore/data obyte-btc-oracle
 ```
-(add `--testnet` to work on testnet).  Here `~/.bitcore/data` is the location of your data directory where full Bitcoin bockchain will be stored, `byteball-btc-oracle` is the name of your node.  `cd` to your node folder:
+(add `--testnet` to work on testnet).  Here `~/.bitcore/data` is the location of your data directory where full Bitcoin bockchain will be stored, `obyte-btc-oracle` is the name of your node.  `cd` to your node folder:
 ```
-cd byteball-btc-oracle
+cd obyte-btc-oracle
 ```
 Install `btc-oracle` service:
 ```
@@ -54,7 +54,7 @@ After you start it for the first time, it will exit immediately complaining abou
 	"deviceName": "BTC Oracle",
 	"admin_email": "admin@yourdomain.com",
 	"from_email": "btc-oracle-alerts@yourdomain.com",
-	"hub": "byteball.org/bb",
+	"hub": "obyte.org/bb",
 	"bWantNewPeers": false,
 	"bSingleAddress": true,
 	"MIN_CONFIRMATIONS": 2,
@@ -63,24 +63,24 @@ After you start it for the first time, it will exit immediately complaining abou
 	"socksPort": 9050,
 	"socksLocalDNS": false,
 	"control_addresses": ["DEVICE ADDRESS OF YOUR GUI WALLET"],
-	"payout_address": "YOUR BYTEBALL ADDRESS WHERE IT IS ALLOWED TO WITHDRAW FUNDS TO",
+	"payout_address": "YOUR OBYTE ADDRESS WHERE IT IS ALLOWED TO WITHDRAW FUNDS TO",
 	"permanent_paring_secret": "0000"
 }
 ```
-The socks* settings are recommended to run your node through TOR.  Since you are trusted to post true and accurate data, you don't want potential attackers to know your IP address, and TOR is a good way to hide it (see below).  `MIN_CONFIRMATIONS` is the minimum number of confirmations before a bitcoin transaction is considered final and posted by the oracle.  `MIN_AVAILABLE_POSTINGS` is the minimum number of unspent outputs, the script will try to split large outputs if this number drops below minimum.  See the documentation of [headless wallet](../../../headless-byteball) and [core library](../../../byteballcore) to learn about other settings in `conf.json`.
+The socks* settings are recommended to run your node through TOR.  Since you are trusted to post true and accurate data, you don't want potential attackers to know your IP address, and TOR is a good way to hide it (see below).  `MIN_CONFIRMATIONS` is the minimum number of confirmations before a bitcoin transaction is considered final and posted by the oracle.  `MIN_AVAILABLE_POSTINGS` is the minimum number of unspent outputs, the script will try to split large outputs if this number drops below minimum.  See the documentation of [headless wallet](../../../headless-obyte) and [core library](../../../ocore) to learn about other settings in `conf.json`.
 
-After editing your `conf.json`, start the node again.  It will take some time to sync with both Byteball and Bitcoin networks.
+After editing your `conf.json`, start the node again.  It will take some time to sync with both Obyte and Bitcoin networks.
 
 Every time your node starts, it prints its pairing code:
 ```
 ====== my device pubkey: A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz
-====== my pairing code: A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@byteball.org/bb#0000
+====== my pairing code: A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@obyte.org/bb#0000
 ```
 Put this code on your site so that your customers are able to start dialog with the bot by clicking a link:
 ```
-<a href="byteball:A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@byteball.org/bb#0000">start a chat with the oracle chatbot</a>
+<a href="byteball:A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@obyte.org/bb#0000">start a chat with the oracle chatbot</a>
 ```
-If you open this link in your control device (specified in `control_addresses`), you have access to admin functions, see the documentation for [headless wallet](../../../headless-byteball).  Type `address` to see the oracle's address and refill its balance so that it is able to pay for the fees.
+If you open this link in your control device (specified in `control_addresses`), you have access to admin functions, see the documentation for [headless wallet](../../../headless-obyte).  Type `address` to see the oracle's address and refill its balance so that it is able to pay for the fees.
 
 ## Security
 Since you are trusted to post true and accurate data about recent Bitcoin transactions, your oracle is a lucrative target for attackers.  Fortunately, the oracle is running in chat interface, which makes it unnecessary to accept incoming connections and have publicly known IP addresses.  This means that in addition to standard security measures, you can also completely hide the IP address of your server from potential attackers so that it won't be easy for them to learn what server to attack in the first place.

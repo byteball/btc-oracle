@@ -2,7 +2,7 @@
 	"name": "btc-oracle",
 	"description": "Obyte BTC Oracle",
 	"author": "Obyte",
-	"version": "0.1.16",
+	"version": "0.1.17",
 	"main": "index.js",
 	"keywords": [
 		"oracle",

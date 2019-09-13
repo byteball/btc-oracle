@@ -83,6 +83,7 @@ function readNumberOfPostingsAvailable(handleNumber){
 // make sure we never run out of spendable (stable) outputs. Keep the number above a threshold, and if it drops below, produce more outputs than consume.
 function createOptimalOutputs(handleOutputs){
 	var arrOutputs = [{amount: 0, address: my_address}];
+	return handleOutputs(arrOutputs);
 	readNumberOfPostingsAvailable(function(count){
 		if (count > conf.MIN_AVAILABLE_POSTINGS)
 			return handleOutputs(arrOutputs);

@@ -25,8 +25,6 @@ const BLOCK_HASH_FEED_NAME = 'bitcoin_hash';
 const BLOCK_HEIGHT_FEED_NAME = 'bitcoin_height';
 const MERKLE_ROOT_FEED_NAME = 'bitcoin_merkle';
 
-var DATA_FEED_COST = 700; // size of typical data feed unit
-var count_postings_available = 0;
 var assocQueuedBlocks = {};
 
 var bTestnet = constants.version.match(/t$/);
@@ -50,63 +48,6 @@ function formatAmount(amount){
 	return amount.toFixed(8).replace(/0+$/, '');
 }
 
-function readNumberOfPostingsAvailable(handleNumber){
-	count_postings_available--;
-	if (count_postings_available > conf.MIN_AVAILABLE_POSTINGS)
-		return handleNumber(count_postings_available);
-	db.query(
-		"SELECT COUNT(*) AS count_big_outputs FROM outputs JOIN units USING(unit) \n\
-		WHERE address=? AND is_stable=1 AND amount>=? AND asset IS NULL AND is_spent=0", 
-		[my_address, DATA_FEED_COST], 
-		function(rows){
-			var count_big_outputs = rows[0].count_big_outputs;
-			db.query(
-				"SELECT SUM(amount) AS total FROM outputs JOIN units USING(unit) \n\
-				WHERE address=? AND is_stable=1 AND amount<? AND asset IS NULL AND is_spent=0 \n\
-				UNION \n\
-				SELECT SUM(amount) AS total FROM witnessing_outputs \n\
-				WHERE address=? AND is_spent=0 \n\
-				UNION \n\
-				SELECT SUM(amount) AS total FROM headers_commission_outputs \n\
-				WHERE address=? AND is_spent=0", 
-				[my_address, DATA_FEED_COST, my_address, my_address], 
-				function(rows){
-					var total = rows.reduce(function(prev, row){ return (prev + row.total); }, 0);
-					var count_postings_paid_by_small_outputs_and_commissions = Math.round(total / DATA_FEED_COST);
-					count_postings_available = count_big_outputs + count_postings_paid_by_small_outputs_and_commissions;
-					handleNumber(count_postings_available);
-				}
-			);
-		}
-	);
-}
-
-// make sure we never run out of spendable (stable) outputs. Keep the number above a threshold, and if it drops below, produce more outputs than consume.
-function createOptimalOutputs(handleOutputs){
-	var arrOutputs = [{amount: 0, address: my_address}];
-	return handleOutputs(arrOutputs);
-	readNumberOfPostingsAvailable(function(count){
-		if (count > conf.MIN_AVAILABLE_POSTINGS)
-			return handleOutputs(arrOutputs);
-		// try to split the biggest output in two
-		db.query(
-			"SELECT amount FROM outputs JOIN units USING(unit) \n\
-			WHERE address=? AND is_stable=1 AND amount>=? AND asset IS NULL AND is_spent=0 \n\
-			ORDER BY amount DESC LIMIT 1", 
-			[my_address, 2*DATA_FEED_COST],
-			function(rows){
-				if (rows.length === 0){
-					notifications.notifyAdminAboutPostingProblem('only '+count+" spendable outputs left, and can't add more");
-					return handleOutputs(arrOutputs);
-				}
-				var amount = rows[0].amount;
-			//	notifications.notifyAdminAboutPostingProblem('only '+count+" spendable outputs left, will split an output of "+amount);
-				arrOutputs.push({amount: Math.round(amount/2), address: my_address});
-				handleOutputs(arrOutputs);
-			}
-		);
-	});
-}
 
 function postDataFeed(datafeed, onDone){
 	function onError(err){
@@ -115,29 +56,28 @@ function postDataFeed(datafeed, onDone){
 	}
 	var network = require('ocore/network.js');
 	var composer = require('ocore/composer.js');
-	createOptimalOutputs(function(arrOutputs){
-		let params = {
-			paying_addresses: [my_address], 
-			outputs: arrOutputs, 
-			signer: headlessWallet.signer, 
-			callbacks: composer.getSavingCallbacks({
-				ifNotEnoughFunds: onError,
-				ifError: onError,
-				ifOk: function(objJoint){
-					network.broadcastJoint(objJoint);
-					onDone();
-				}
-			})
-		};
-		let objMessage = {
-			app: "data_feed",
-			payload_location: "inline",
-			payload_hash: objectHash.getBase64Hash(datafeed),
-			payload: datafeed
-		};
-		params.messages = [objMessage];
-		composer.composeJoint(params);
-	});
+	var arrOutputs = [{amount: 0, address: my_address}];
+	let params = {
+		paying_addresses: [my_address], 
+		outputs: arrOutputs, 
+		signer: headlessWallet.signer, 
+		callbacks: composer.getSavingCallbacks({
+			ifNotEnoughFunds: onError,
+			ifError: onError,
+			ifOk: function(objJoint){
+				network.broadcastJoint(objJoint);
+				onDone();
+			}
+		})
+	};
+	let objMessage = {
+		app: "data_feed",
+		payload_location: "inline",
+		payload_hash: objectHash.getBase64Hash(datafeed),
+		payload: datafeed
+	};
+	params.messages = [objMessage];
+	composer.composeJoint(params);
 }
 
 function reliablyPostDataFeed(datafeed){

@@ -15,6 +15,7 @@ var db = require('ocore/db.js');
 var mutex = require('ocore/mutex.js');
 var eventBus = require('ocore/event_bus.js');
 var ValidationUtils = require("ocore/validation_utils.js");
+var string_utils = require('ocore/string_utils.js');
 var desktopApp = require('ocore/desktop_app.js');
 var headlessWallet = require('headless-obyte');
 
@@ -156,14 +157,59 @@ function reliablyPostDataFeed(datafeed){
 	});
 }
 
-function determineIfDataFeedAlreadyPosted(name, value, handleResult){
-	db.query(
-		"SELECT 1 FROM data_feeds CROSS JOIN unit_authors USING(unit) WHERE address=? AND feed_name=? AND `value`=?", 
-		[my_address, name, value],
-		function(rows){
-			handleResult(rows.length > 0);
+function determineIfDataFeedAlreadyPosted(feed_name, value, handleResult){
+	const data_feeds = require('ocore/data_feeds.js');
+	const storage = require('ocore/storage.js');
+	data_feeds.dataFeedExists([my_address], feed_name, '=', value, 0, 1e15, false, function (bExists) {
+		if (bExists)
+			return handleResult(true);
+		var bFound = false;
+		for (var unit in storage.assocUnstableMessages) {
+			var objUnit = storage.assocUnstableUnits[unit];
+			if (!objUnit)
+				throw Error("unstable unit " + unit + " not in assoc");
+			if (objUnit.author_addresses[0] !== my_address)
+				continue;
+			storage.assocUnstableMessages[unit].forEach(function (message) {
+				if (message.app !== 'data_feed')
+					return;
+				var payload = message.payload;
+				if (!payload.hasOwnProperty(feed_name))
+					return;
+				var feed_value = payload[feed_name];
+				if (value === feed_value)
+					bFound = true;
+			});
+			if (bFound)
+				break;
 		}
-	);
+		handleResult(bFound);
+	});
+}
+
+
+function readDatafeedValues(address, feed_name, limit, handle) {
+	var options = {};
+	options.gte = "dfv\n" + address + "\n" + feed_name + '\n';
+	options.lte = "dfv\n" + address + "\n" + feed_name + '\n' + "\uFFFF";
+	if (limit)
+		options.limit = limit;
+
+	var arrValues = [];
+	var handleData = function (data){
+		var arrParts = data.value.split('\n');
+		var value = string_utils.getFeedValue(arrParts[0]); // may convert to number
+		arrValues.push(value);
+	}
+	var kvstore = require('ocore/kvstore.js');
+	var stream = kvstore.createReadStream(options);
+	stream.on('data', handleData)
+	.on('end', function(){
+		handle(arrValues);
+	})
+	.on('error', function(error){
+		throw Error('error from data stream: '+error);
+	});
 }
 
 db.query("INSERT "+db.getIgnore()+" INTO pairing_secrets (pairing_secret, expiry_date, is_permanent) VALUES('0000', '2035-01-01', 1)");
@@ -209,17 +255,16 @@ function initChat(oracleService){
 	}
 	
 	function checkForMissingBlocks(){
-		db.query(
-			"SELECT int_value FROM data_feeds CROSS JOIN unit_authors USING(unit) WHERE address=? AND feed_name=? ORDER BY int_value", 
-			[my_address, BLOCK_HEIGHT_FEED_NAME],
-			function(rows){
-				if (rows.length === 0) // no blocks yet
+		readDatafeedValues(
+			my_address, BLOCK_HEIGHT_FEED_NAME, 100,
+			function (arrHeights) {
+				arrHeights.reverse(); // data feed returns in reverse order
+				if (arrHeights.length === 0) // no blocks yet
 					return;
 				var arrMissingHeights = [];
 				// 1. search for skipped block heights, e.g. 1,2,3,5,6 -- 4 is missing
 				var prev_height;
-				rows.forEach(row => {
-					let height = row.int_value;
+				arrHeights.forEach(height => {
 					if (prev_height && height !== prev_height + 1){
 						for (var h=prev_height+1; h<height; h++)
 							arrMissingHeights.push(h);
@@ -428,42 +473,45 @@ function initChat(oracleService){
 					});
 					if (arrMyElements.length === 0)
 						throw Error("my outputs not found in "+JSON.stringify(item.tx));
-					console.log(i+': looking for block '+height+': '+blockHash);
-					db.query(
-						"SELECT DISTINCT merkle_data.value, is_stable \n\
-						FROM data_feeds AS block_hash_data \n\
-						JOIN data_feeds AS block_height_data USING(unit) \n\
-						JOIN data_feeds AS merkle_data USING(unit) \n\
-						CROSS JOIN unit_authors USING(unit) \n\
-						JOIN units USING(unit) \n\
-						WHERE address=? AND sequence='good' \n\
-							AND block_hash_data.feed_name=? AND block_hash_data.value=? \n\
-							AND block_height_data.feed_name=? AND block_height_data.int_value=? \n\
-							AND merkle_data.feed_name=?",
-						[my_address, BLOCK_HASH_FEED_NAME, blockHash, BLOCK_HEIGHT_FEED_NAME, height, MERKLE_ROOT_FEED_NAME],
-						function(rows){
-							if (rows.length === 0)
-								return device.sendMessageToDevice(from_address, 'text', "No proof found for tx "+item.tx.hash+", block #"+height+" "+blockHash);
-							if (rows.length > 1)
-								notifications.notifyAdmin('more than one proof', "address "+bitcoin_address+"\ntx "+item.tx.hash+"\nheight "+height+"\nblock "+blockHash+"\n"+JSON.stringify(rows, null, '\t'));
-							let row = rows[0];
-							if (!row.is_stable)
-								return device.sendMessageToDevice(from_address, 'text', "The proof is not stable yet, try again in a few minutes.");
-							let merkle_root = row.value;
-							readOutputsInBlock(height, arrElements => {
-								arrMyElements.forEach(element => {
-									let element_index = arrElements.indexOf(element);
-									if (element_index < 0)
-										throw Error(element+" not found among block outputs, block "+blockHash);
-									let proof = merkle.getMerkleProof(arrElements, element_index);
-									let serialized_proof = merkle.serializeMerkleProof(proof);
-									if (proof.root !== merkle_root)
-										throw Error("merkle root mismatch: in db "+merkle_root+", proof "+serialized_proof);
-									device.sendMessageToDevice(from_address, 'text', "This is your merkle proof of "+element+".  Please copy and paste it on the Send page to unlock the funds from your smart wallet:\n"+serialized_proof);
+					console.log(i + ': looking for block ' + height + ': ' + blockHash);
+					const data_feeds = require('ocore/data_feeds.js');
+					const storage = require('ocore/storage.js');
+					data_feeds.readDataFeedValue([my_address], BLOCK_HASH_FEED_NAME, blockHash, 0, 1e15, false, 'last', function (objResult) {
+						if (!objResult.value)
+							return device.sendMessageToDevice(from_address, 'text', "No proof found for tx " + item.tx.hash + ", block #" + height + " " + blockHash);
+						if (!objResult.unit)
+							throw Error("no unit");
+						storage.readJoint(db, objResult.unit, {
+							ifNotFound: function () {
+								throw Error("unit " + objResult.unit + " not found");
+							},
+							ifFound: function (objJoint) {
+								const objUnit = objJoint.unit;
+								let merkle_root;
+								objUnit.messages.forEach(message => {
+									if (message.app !== 'data_feed')
+										return;
+									merkle_root = message.payload[MERKLE_ROOT_FEED_NAME];
+									if (!merkle_root)
+										throw Error("no merkle root in data feed of " + objResult.unit);
 								});
-							});
-						}
-					);
+								if (!merkle_root)
+									throw Error("no data feed in " + objResult.unit);
+								readOutputsInBlock(height, arrElements => {
+									arrMyElements.forEach(element => {
+										let element_index = arrElements.indexOf(element);
+										if (element_index < 0)
+											throw Error(element + " not found among block outputs, block " + blockHash);
+										let proof = merkle.getMerkleProof(arrElements, element_index);
+										let serialized_proof = merkle.serializeMerkleProof(proof);
+										if (proof.root !== merkle_root)
+											throw Error("merkle root mismatch: in db " + merkle_root + ", proof " + serialized_proof);
+										device.sendMessageToDevice(from_address, 'text', "This is your merkle proof of " + element + ".  Please copy and paste it on the Send page to unlock the funds from your smart wallet:\n" + serialized_proof);
+									});
+								});
+							}
+						});
+					});
 					bFound = true;
 					break; // handle only the last tx to this address
 				}

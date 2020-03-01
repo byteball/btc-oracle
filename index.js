@@ -198,7 +198,7 @@ function initChat(oracleService){
 		readDatafeedValues(
 			my_address, BLOCK_HEIGHT_FEED_NAME, 100,
 			function (arrHeights) {
-				arrHeights.reverse(); // data feed returns in reverse order
+				arrHeights.sort(); // data feed returns in reverse order by mci
 				console.log('last posted block heights', arrHeights);
 				if (arrHeights.length === 0) // no blocks yet
 					return;

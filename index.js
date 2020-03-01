@@ -199,6 +199,7 @@ function initChat(oracleService){
 			my_address, BLOCK_HEIGHT_FEED_NAME, 100,
 			function (arrHeights) {
 				arrHeights.reverse(); // data feed returns in reverse order
+				console.log('last posted block heights', arrHeights);
 				if (arrHeights.length === 0) // no blocks yet
 					return;
 				var arrMissingHeights = [];
@@ -216,6 +217,7 @@ function initChat(oracleService){
 					let last_confirmed_height = currentHeight - MIN_CONFIRMATIONS + 1;
 					for (var h=prev_height+1; h<=last_confirmed_height; h++)
 						arrMissingHeights.push(h);
+					console.log('missing block heights', arrMissingHeights);
 					async.eachSeries(arrMissingHeights, postBlockData);
 				});
 			}

@@ -105,7 +105,7 @@ function determineIfDataFeedAlreadyPosted(feed_name, value, handleResult){
 			return handleResult(true);
 		var bFound = false;
 		for (var unit in storage.assocUnstableMessages) {
-			var objUnit = storage.assocUnstableUnits[unit];
+			var objUnit = storage.assocUnstableUnits[unit] || storage.assocStableUnits[unit];
 			if (!objUnit)
 				throw Error("unstable unit " + unit + " not in assoc");
 			if (objUnit.author_addresses[0] !== my_address)

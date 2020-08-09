@@ -365,11 +365,15 @@ function initChat(oracleService){
 		});
 	});
 	
-	eventBus.on('paired', function(from_address){
-		device.sendMessageToDevice(from_address, 'text', "Type a receiving Bitcoin address, I'll respond with the merkle proof that this address did receive bitcoins.");
-	});
+	eventBus.on('paired', parseText);
 
-	eventBus.on('text', function(from_address, text){
+	eventBus.on('text', parseText);
+
+	function parseText(from_address, text){
+		if (text === conf.permanent_paring_secret || text === '0000'){
+			return device.sendMessageToDevice(from_address, 'text', "Type a receiving Bitcoin address, I'll respond with the merkle proof that this address did receive bitcoins.");
+		}
+
 		text = text.trim();
 		let lc_text = text.toLowerCase();
 		
@@ -465,7 +469,7 @@ function initChat(oracleService){
 		else
 			return device.sendMessageToDevice(from_address, 'text', "That doesn't look like a valid Bitcoin address.  Type a receiving Bitcoin address, I'll respond with the merkle proof that this address did receive bitcoins.");
 		
-	});
+	}
 	
 }
 

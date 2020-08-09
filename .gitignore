@@ -36,3 +36,8 @@ Session.vim
 .netrwhist
 *~
 
+# dotenv environment variables file
+.env
+
+
+.idea/

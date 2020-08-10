@@ -64,7 +64,7 @@ After you start it for the first time, it will exit immediately complaining abou
 	"socksLocalDNS": false,
 	"control_addresses": ["DEVICE ADDRESS OF YOUR GUI WALLET"],
 	"payout_address": "YOUR OBYTE ADDRESS WHERE IT IS ALLOWED TO WITHDRAW FUNDS TO",
-	"permanent_paring_secret": "0000"
+	"permanent_paring_secret": "*"
 }
 ```
 The socks* settings are recommended to run your node through TOR.  Since you are trusted to post true and accurate data, you don't want potential attackers to know your IP address, and TOR is a good way to hide it (see below).  `MIN_CONFIRMATIONS` is the minimum number of confirmations before a bitcoin transaction is considered final and posted by the oracle.  `MIN_AVAILABLE_POSTINGS` is the minimum number of unspent outputs, the script will try to split large outputs if this number drops below minimum.  See the documentation of [headless wallet](../../../headless-obyte) and [core library](../../../ocore) to learn about other settings in `conf.json`.

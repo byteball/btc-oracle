@@ -64,7 +64,7 @@ After you start it for the first time, it will exit immediately complaining abou
 	"socksLocalDNS": false,
 	"control_addresses": ["DEVICE ADDRESS OF YOUR GUI WALLET"],
 	"payout_address": "YOUR OBYTE ADDRESS WHERE IT IS ALLOWED TO WITHDRAW FUNDS TO",
-	"permanent_paring_secret": "0000"
+	"permanent_paring_secret": "*"
 }
 ```
 The socks* settings are recommended to run your node through TOR.  Since you are trusted to post true and accurate data, you don't want potential attackers to know your IP address, and TOR is a good way to hide it (see below).  `MIN_CONFIRMATIONS` is the minimum number of confirmations before a bitcoin transaction is considered final and posted by the oracle.  `MIN_AVAILABLE_POSTINGS` is the minimum number of unspent outputs, the script will try to split large outputs if this number drops below minimum.  See the documentation of [headless wallet](../../../headless-obyte) and [core library](../../../ocore) to learn about other settings in `conf.json`.
@@ -78,7 +78,11 @@ Every time your node starts, it prints its pairing code:
 ```
 Put this code on your site so that your customers are able to start dialog with the bot by clicking a link:
 ```
-<a href="byteball:A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@obyte.org/bb#0000">start a chat with the oracle chatbot</a>
+<a href="obyte:A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@obyte.org/bb#0000">start a chat with the oracle chatbot</a>
+```
+You could also take them staight to merkle proof by adding the Bitcoin address as pairing code:
+```
+<a href="obyte:A9bg4s0ZI36PcTp4p8sNywZ+DGeFm9dP75TcACI22Byz@obyte.org/bb#1BitcoinEaterAddressDontSendf59kuE">get merkle proof from BTC oracle</a>
 ```
 If you open this link in your control device (specified in `control_addresses`), you have access to admin functions, see the documentation for [headless wallet](../../../headless-obyte).  Type `address` to see the oracle's address and refill its balance so that it is able to pay for the fees.
 

@@ -24,5 +24,9 @@
 		"headless-obyte": "git+https://github.com/byteball/headless-obyte.git",
 		"ocore": "git+https://github.com/byteball/ocore.git",
 		"bitcore-lib": "^0.13.14"
+	},
+	"resolutions": {
+		"level-rocksdb": "^5.0.0",
+		"sqlite3": "^5.0.0"
 	}
 }

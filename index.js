@@ -255,8 +255,10 @@ function start(){
 			for (let output of tx.vout) {
 				const amount = output.value;
 				const address = output.scriptPubKey.address;
-				if (!amount)
-					throw Error(`no amount in tx ${JSON.stringify(tx, null, 2)}`);
+				if (typeof amount !== 'number')
+					throw Error(`bad amount in tx ${JSON.stringify(tx, null, 2)}`);
+				if (amount === 0) // OP_RETURN
+					continue;
 				if (!address)
 					throw Error(`no address in tx ${JSON.stringify(tx, null, 2)}`);
 				let element = address+':'+formatAmount(amount);

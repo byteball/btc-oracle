@@ -20,6 +20,7 @@
 		"url": "https://github.com/byteball/btc-oracle/issues"
 	},
 	"dependencies": {
+		"bitcoin-core": "^3.0.0",
 		"headless-obyte": "git+https://github.com/byteball/headless-obyte.git",
 		"ocore": "git+https://github.com/byteball/ocore.git",
 		"bitcore-lib": "^0.13.14"

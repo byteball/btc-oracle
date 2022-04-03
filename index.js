@@ -2,10 +2,8 @@
 'use strict';
 var util = require('util');
 var crypto = require('crypto');
-var async = require('ocore/node_modules/async');
-var _ = require('ocore/node_modules/lodash');
+var _ = require('lodash');
 var bitcore = require('bitcore-lib');
-var EventEmitter = require('events').EventEmitter;
 var notifications = require('./notifications.js');
 var conf = require('ocore/conf.js');
 var objectHash = require('ocore/object_hash.js');
@@ -18,6 +16,7 @@ var ValidationUtils = require("ocore/validation_utils.js");
 var string_utils = require('ocore/string_utils.js');
 var desktopApp = require('ocore/desktop_app.js');
 var headlessWallet = require('headless-obyte');
+var client = require('./bitcoin_client.js');
 
 const RETRY_TIMEOUT = 300*1000;
 const MIN_CONFIRMATIONS = conf.MIN_CONFIRMATIONS || 2;
@@ -32,7 +31,6 @@ var my_address;
 var bitcoinNetwork = bTestnet ? bitcore.Networks.testnet : bitcore.Networks.livenet;
 
 conf.bSingleAddress = true;
-conf.MIN_AVAILABLE_POSTINGS = conf.MIN_AVAILABLE_POSTINGS || 100;
 
 /*
 // testnet
@@ -98,6 +96,8 @@ function reliablyPostDataFeed(datafeed){
 }
 
 function determineIfDataFeedAlreadyPosted(feed_name, value, handleResult){
+	if (!handleResult)
+		return new Promise(resolve => determineIfDataFeedAlreadyPosted(feed_name, value, resolve));
 	const data_feeds = require('ocore/data_feeds.js');
 	const storage = require('ocore/storage.js');
 	data_feeds.dataFeedExists([my_address], feed_name, '=', value, 0, 1e15, false, function (bExists) {
@@ -154,7 +154,6 @@ function readDatafeedValues(address, feed_name, limit, handle) {
 
 db.query("INSERT "+db.getIgnore()+" INTO pairing_secrets (pairing_secret, expiry_date, is_permanent) VALUES('0000', '2035-01-01', 1)");
 
-var bHeadlessWalletReady = false;
 eventBus.once('headless_wallet_ready', function(){
 	if (!conf.admin_email || !conf.from_email){
 		console.log("please specify admin_email and from_email in your "+desktopApp.getAppDataDir()+'/conf.json');
@@ -164,40 +163,32 @@ eventBus.once('headless_wallet_ready', function(){
 	headlessWallet.readSingleAddress(function(address){
 		my_address = address;
 		console.log('===== my address '+my_address);
-		bHeadlessWalletReady = true;
+		start();
 	});
 });
 
+function wait(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
 
+async function getLastConfirmedHeight() {
+	const currentHeight = await client.getBlockCount();
+	return currentHeight - MIN_CONFIRMATIONS + 1;
+}
 
-function initChat(oracleService){
+function start(){
 	
-	console.log('=== initChat');
-	
-	// wait and repeat
-	if (!bHeadlessWalletReady){
-		eventBus.once('headless_wallet_ready', function(){
-			bHeadlessWalletReady = true;
-			initChat(oracleService);
-		});
-		return;
-	}
+	console.log('=== starting');
 	
 	var bbWallet = require('ocore/wallet.js');
 	var device = require('ocore/device.js');
 	
-	function readCurrentHeight(handleCurrentHeight){
-		oracleService.node.services.bitcoind.getInfo(function(err, currentInfo){
-			if (err)
-				throw Error("getInfo failed: "+err);
-			handleCurrentHeight(currentInfo.blocks);
-		});
-	}
+	let prev_confirmed_height;
 	
 	function checkForMissingBlocks(){
 		readDatafeedValues(
 			my_address, BLOCK_HEIGHT_FEED_NAME, 100,
-			function (arrHeights) {
+			async function (arrHeights) {
 				arrHeights.sort(); // data feed returns in reverse order by mci
 				console.log('last posted block heights', arrHeights);
 				if (arrHeights.length === 0) // no blocks yet
@@ -213,157 +204,109 @@ function initChat(oracleService){
 					prev_height = height;
 				});
 				// 2. catch up blocks generated while we were offline
-				readCurrentHeight(currentHeight => {
-					let last_confirmed_height = currentHeight - MIN_CONFIRMATIONS + 1;
-					for (var h=prev_height+1; h<=last_confirmed_height; h++)
-						arrMissingHeights.push(h);
-					console.log('missing block heights', arrMissingHeights);
-					async.eachSeries(arrMissingHeights, postBlockData);
-				});
+				let last_confirmed_height = await getLastConfirmedHeight();
+				for (let h=prev_height+1; h<=last_confirmed_height; h++)
+					arrMissingHeights.push(h);
+				prev_confirmed_height = last_confirmed_height;
+				console.log('missing block heights', arrMissingHeights);
+				for (let h of arrMissingHeights)
+					await postBlockData(h);
 			}
 		);
 	}
 	
-	function postBlockData(height, onDone){
-		mutex.lock(['post'], unlock => {
-			function abort(err){
-				console.log(err);
-				unlock();
-				if (onDone)
-					onDone();
-			}
-			console.log('will post data of block '+height);
-			readOutputsInBlock(height, function(arrElements, blockHash){
-				if (assocQueuedBlocks[blockHash])
-					return abort("block "+blockHash+" already queued");
-				determineIfDataFeedAlreadyPosted(BLOCK_HASH_FEED_NAME, blockHash, function(bAlreadyPosted){
-					if (bAlreadyPosted)
-						return abort("block "+blockHash+" already processed");
-					if (assocQueuedBlocks[blockHash])
-						return abort("block "+blockHash+" already queued 2");
-					let merkle_root = merkle.getMerkleRoot(arrElements);
-					let rand_int32 = crypto.createHash("sha256").update(blockHash, "utf8").digest().readUInt32BE(0);
-					let rand_1_to_100000 = Math.floor(100000 * rand_int32 / Math.pow(2, 32)) + 1;
-					let datafeed = {};
-					datafeed[BLOCK_HASH_FEED_NAME] = blockHash;
-					datafeed[BLOCK_HEIGHT_FEED_NAME] = height;
-					if (merkle_root)
-						datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
-					datafeed['random'+height] = rand_1_to_100000;
-					reliablyPostDataFeed(datafeed);
-					unlock();
-					if (onDone)
-						onDone();
-				});
-			});
-		});
+	async function postBlockData(height) {
+		const unlock = await mutex.lock('post');
+		console.log('will post data of block '+height);
+		const [arrElements, blockHash] = await readOutputsInBlock(height);
+		if (!blockHash)
+			throw Error(`no block hash at height ${height}`);
+		if (assocQueuedBlocks[blockHash])
+			return unlock("block "+blockHash+" already queued");
+		const bAlreadyPosted = await determineIfDataFeedAlreadyPosted(BLOCK_HASH_FEED_NAME, blockHash);
+		if (bAlreadyPosted)
+			return unlock("block "+blockHash+" already processed");
+		if (assocQueuedBlocks[blockHash])
+			return unlock("block "+blockHash+" already queued 2");
+		let merkle_root = merkle.getMerkleRoot(arrElements);
+		let rand_int32 = crypto.createHash("sha256").update(blockHash, "utf8").digest().readUInt32BE(0);
+		let rand_1_to_100000 = Math.floor(100000 * rand_int32 / Math.pow(2, 32)) + 1;
+		let datafeed = {};
+		datafeed[BLOCK_HASH_FEED_NAME] = blockHash;
+		datafeed[BLOCK_HEIGHT_FEED_NAME] = height;
+		if (merkle_root)
+			datafeed[MERKLE_ROOT_FEED_NAME] = merkle_root;
+		datafeed['random'+height] = rand_1_to_100000;
+		reliablyPostDataFeed(datafeed);
+		unlock();
 	}
 	
-	function readOutputsInBlock(height, handleOutputElements){
-		readBlockWithRetries(height, function(block) {
-			var arrElements = [];
-			var bAborted = false;
-			block.transactions.forEach(transaction => {
-				transaction.outputs.forEach(output => {
-					if (!output.satoshis)
-						return;
-					//	throw Error("no satoshis in output "+JSON.stringify(output, null, '\t')+', tx '+JSON.stringify(transaction, null, '\t'));
-					let amount = output.satoshis/1e8;
-					let address = output.script.toAddress(bitcoinNetwork);
-					if (!address){
-						return console.log('=== unrecognized output: '+output.inspect());
-						/*
-						console.error('=== output: '+output.inspect());
-						if (output.inspect().match(/OP_RETURN/))
-							return console.error('=== skipping OP_RETURN');
-						if (output.inspect().match(/OP_0 /))
-							return console.error('=== skipping OP_0');
-						bAborted = true;
-						showTransaction(transaction.hash, () => {
-							throw Error("no address in output "+util.inspect(output, {depth:null})+'\ntx '+JSON.stringify(transaction, null, '\t')+'\ninfo '+JSON.stringify(output.script.getAddressInfo(), null, '\t'));
-						});
-						*/
-					}
-					let element = address+':'+formatAmount(amount);
-					console.log(element);
-					arrElements.push(element);
-				});
-			});
-			if (bAborted)
-				return;
-			arrElements = _.uniq(arrElements);
-			arrElements.sort();
-			handleOutputElements(arrElements, block.hash);
-		});
+	async function readOutputsInBlock(height) {
+		const block = await readBlockWithRetries(height);
+		var arrElements = [];
+		for (let tx of block.tx) {
+			for (let output of tx.vout) {
+				const amount = vout.value;
+				const address = output.scriptPubKey.address;
+				if (!address)
+					throw Error(`no address in tx ${JSON.stringify(tx, null, 2)}`);
+				let element = address+':'+formatAmount(amount);
+				console.log(element);
+				arrElements.push(element);
+			}
+		}
+		arrElements = _.uniq(arrElements);
+		arrElements.sort();
+		return [arrElements, block.hash];
 	}
 	
-	function readBlockHeaderWithRetries(blockHash, handleBlockHeader, count_tries){
-		oracleService.node.services.bitcoind.getBlockHeader(blockHash, function(err, blockHeader) {
-			if (err){
-				if (count_tries >= 3)
-					throw Error('getBlockHeader '+blockHash+' failed after 3 attempts: '+err);
-				console.log('getBlockHeader '+blockHash+' attempt '+count_tries+' failed, will retry: '+err);
-				setTimeout(() => {
-					readBlockHeaderWithRetries(blockHash, handleBlockHeader, (count_tries || 0) + 1);
-				}, 30000);
-				return;
-			}
-			console.log('blockHeader '+JSON.stringify(blockHeader, null, '\t'));
-			handleBlockHeader(blockHeader);
-		});
+
+	async function readBlock(height) {
+		const hash = await client.getBlockHash(height);
+		const block = await client.getBlock(hash, 2);
+		return block;
 	}
 	
-	function readBlockWithRetries(height, handleBlock, count_tries){
-		oracleService.node.services.bitcoind.getBlock(height, function(err, block) {
-			if (err){
-				if (count_tries >= 3)
-					throw Error('getBlock '+height+' failed after 3 attempts: '+err);
-				console.log('getBlock '+height+' attempt '+count_tries+' failed, will retry: '+err);
-				setTimeout(() => {
-					readBlockWithRetries(height, handleBlock, (count_tries || 0) + 1);
-				}, 30000);
-				return;
+	async function readBlockWithRetries(height) {
+		let err;
+		for (let i = 0; i < 3; i++){
+			try {
+				return await readBlock(height);
 			}
-			handleBlock(block);
-		});
+			catch (e) {
+				err = e;
+				console.log('getBlock ' + height + ' attempt ' + i + ' failed, will retry: ' + e);
+				await wait(3000);
+			}
+			throw Error('getBlock ' + height + ' failed after 3 attempts: ' + err);
+		}
 	}
 	
 	/////////////////////////////////
 	// start
 	
 	
-	/*
-	function showTransaction(txid, onDone){
-		console.error('tx '+txid);
-		oracleService.node.services.bitcoind.getDetailedTransaction(txid, function(err, info) {
-			if (err)
-				console.error("getDetailedTransaction "+txid+" failed: "+err);
-			console.error('getDetailedTransaction: ', info);
-			onDone();
-		});
-	}*/
 
 	checkForMissingBlocks();
+
+	setInterval(checkForNewBlocks, 30 * 1000);
+
+	async function checkForNewBlocks() {
+		let last_confirmed_height = await getLastConfirmedHeight();
+		var arrHeights = [];
+		if (prev_confirmed_height) {
+			if (prev_confirmed_height === last_confirmed_height)
+				return console.log(`last confirmed height unchanged ${last_confirmed_height}`);
+			for (let h = prev_confirmed_height + 1; h <= last_confirmed_height; h++)
+				arrHeights.push(h); // sometimes 'block' event is not called for a new block, make sure we don't skip it
+		}
+		else
+			arrHeights.push(last_confirmed_height);
+		prev_confirmed_height = last_confirmed_height;
+		for (let h of arrHeights)
+			await postBlockData(h);
+	}
 	
-	var prev_height;
-	oracleService.node.services.bitcoind.on('block', function(blockHash) {
-		blockHash = blockHash.toString('hex');
-		console.log('=== new block '+blockHash);
-		// get only the block header and index (including chain work, height, and previous hash)
-		readBlockHeaderWithRetries(blockHash, function(blockHeader) {
-			let last_height = blockHeader.height;
-			let last_confirmed_height = last_height - MIN_CONFIRMATIONS + 1;
-			var arrHeights = [];
-			if (prev_height)
-				for (var h=prev_height+1; h<=last_confirmed_height; h++)
-					arrHeights.push(h); // sometimes 'block' event is not called for a new block, make sure we don't skip it
-			else
-				arrHeights.push(last_confirmed_height);
-			prev_height = last_confirmed_height;
-			async.eachSeries(arrHeights, postBlockData);
-		//	postBlockData(last_confirmed_height);
-		});
-	});
 	
 	eventBus.on('paired', parseText);
 
@@ -383,6 +326,8 @@ function initChat(oracleService){
 		var bValidBitcoinAddress = bitcore.Address.isValid(text, bitcoinNetwork);
 		if (bValidBitcoinAddress){
 			var bitcoin_address = text;
+			// todo get address history and block info from blockchain.info or blockstream API
+			/*
 			oracleService.node.services.bitcoind.getAddressHistory([bitcoin_address], {queryMempool: false}, function(err, history){
 				if (err){
 				//	throw Error('getAddressHistory failed: '+err);
@@ -396,10 +341,6 @@ function initChat(oracleService){
 				var bFound = false;
 				for (var i=0; i<history.items.length; i++){ // history is already sorted in reverse order and truncated at 50 items
 					var item = history.items[i];
-					/*if (item.satoshis < 0) // spend from the address
-						continue;
-					if (item.confirmations < MIN_CONFIRMATIONS)
-						continue;*/
 					var arrAddresses = Object.keys(item.addresses);
 					if (arrAddresses.length > 1)
 						throw Error('more than 1 to-address: '+arrAddresses.join(', ')+'; tx '+item.tx.hash);
@@ -464,6 +405,7 @@ function initChat(oracleService){
 				if (!bFound)
 					throw Error("No incoming transactions to address "+bitcoin_address);
 			});
+			*/
 			return;
 		}
 		else
@@ -474,31 +416,3 @@ function initChat(oracleService){
 }
 
 
-function OracleService(options) {
-	this.node = options.node;
-	EventEmitter.call(this, options);
-	this.bus = this.node.openBus();
-	
-	initChat(this);
-}
-util.inherits(OracleService, EventEmitter);
-
-OracleService.dependencies = ['bitcoind'];
-
-OracleService.prototype.start = function(callback) {
-	setImmediate(callback);
-}
-
-OracleService.prototype.stop = function(callback) {
-	setImmediate(callback);
-}
-
-OracleService.prototype.getAPIMethods = function() {
-	return [];
-};
-
-OracleService.prototype.getPublishEvents = function() {
-	return [];
-};
-
-module.exports = OracleService;

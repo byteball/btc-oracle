@@ -39,6 +39,11 @@ headlessWallet.readSingleAddress = function(handleAddress){
 };
 */
 
+process.on('unhandledRejection', up => {
+	console.error('unhandledRejection event', up, up.stack);
+	throw up;
+});
+
 // make sure exponential notation is never used
 function formatAmount(amount){
 	if (amount >= 1)
@@ -245,9 +250,13 @@ function start(){
 		const block = await readBlockWithRetries(height);
 		var arrElements = [];
 		for (let tx of block.tx) {
+			if (!tx.vout)
+				throw Error(`no vout in tx ${JSON.stringify(tx, null, 2)}`);
 			for (let output of tx.vout) {
-				const amount = vout.value;
+				const amount = output.value;
 				const address = output.scriptPubKey.address;
+				if (!amount)
+					throw Error(`no amount in tx ${JSON.stringify(tx, null, 2)}`);
 				if (!address)
 					throw Error(`no address in tx ${JSON.stringify(tx, null, 2)}`);
 				let element = address+':'+formatAmount(amount);

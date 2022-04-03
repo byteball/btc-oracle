@@ -259,8 +259,12 @@ function start(){
 					throw Error(`bad amount in tx ${JSON.stringify(tx, null, 2)}`);
 				if (amount === 0) // OP_RETURN
 					continue;
-				if (!address)
-					throw Error(`no address in tx ${JSON.stringify(tx, null, 2)}`);
+				if (!address) {
+					if (output.scriptPubKey.type !== 'multisig')
+						throw Error(`no address in tx ${JSON.stringify(tx, null, 2)}`);
+					console.log(`skipping output without address in tx ${JSON.stringify(tx, null, 2)}`);
+					continue;
+				}
 				let element = address+':'+formatAmount(amount);
 				console.log(element);
 				arrElements.push(element);

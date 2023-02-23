@@ -191,6 +191,7 @@ async function start(){
 	
 	let prev_confirmed_height;
 
+	await wait(10 * 1000);
 	await network.waitUntilCatchedUp();
 	console.log('catched up');
 	

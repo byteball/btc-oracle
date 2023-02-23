@@ -181,14 +181,18 @@ async function getLastConfirmedHeight() {
 	return currentHeight - MIN_CONFIRMATIONS + 1;
 }
 
-function start(){
+async function start(){
 	
 	console.log('=== starting');
 	
 	var bbWallet = require('ocore/wallet.js');
 	var device = require('ocore/device.js');
+	var network = require('ocore/network.js');
 	
 	let prev_confirmed_height;
+
+	await network.waitUntilCatchedUp();
+	console.log('catched up');
 	
 	function checkForMissingBlocks(){
 		readDatafeedValues(

@@ -228,7 +228,10 @@ async function start(){
 	async function postBlockData(height) {
 		const unlock = await mutex.lock('post');
 		console.log('will post data of block '+height);
-		const [arrElements, blockHash] = await readOutputsInBlock(height);
+		const arr = await readOutputsInBlock(height);
+		if (!arr)
+			return unlock(`unable to get block`, height);
+		const [arrElements, blockHash] = arr;
 		if (!blockHash)
 			throw Error(`no block hash at height ${height}`);
 		if (assocQueuedBlocks[blockHash])
@@ -253,6 +256,8 @@ async function start(){
 	
 	async function readOutputsInBlock(height) {
 		const block = await readBlockWithRetries(height);
+		if (!block)
+			return null;
 		var arrElements = [];
 		for (let tx of block.tx) {
 			if (!tx.vout)
@@ -294,6 +299,10 @@ async function start(){
 				return await readBlock(height);
 			}
 			catch (e) {
+				if (e.toString().match(/pruned data/)) {
+					console.log('getBlock ' + height + ' failed due to pruned data: ' + e);
+					return null;
+				}
 				err = e;
 				console.log('getBlock ' + height + ' attempt ' + i + ' failed, will retry: ' + e);
 				await wait(3000);

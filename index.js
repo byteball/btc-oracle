@@ -272,7 +272,7 @@ async function start(){
 				if (!address) {
 					if (output.scriptPubKey.type !== 'multisig' && output.scriptPubKey.type !== 'nulldata' && output.scriptPubKey.type !== 'pubkey' && output.scriptPubKey.type !== 'nonstandard')
 						throw Error(`no address in tx ${JSON.stringify(tx, null, 2)}`);
-					console.log(`skipping output without address in tx ${JSON.stringify(tx, null, 2)}`);
+					console.log(`skipping output without address ${JSON.stringify(output, null, 2)}`);
 					continue;
 				}
 				let element = address+':'+formatAmount(amount);
